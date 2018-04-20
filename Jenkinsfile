@@ -3,12 +3,12 @@
 @Library('sec_ci_libs@v2-latest') _
 
 // master_branches are for authentication library, feel free to add your feature/* branch here
-def master_branches = ["master"] as String[]
+def master_branches = ["master", "feature/ci"] as String[]
 
 // release branches are for autmatic version bumps
 // Do NOT add feature branches here!
 // Do NOT add anything you might want to merge into a release branch here!
-def release_branches = ["master"] as String[]
+def release_branches = ["master", "feature/ci"] as String[]
 
 pipeline {
   agent {
