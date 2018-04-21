@@ -223,7 +223,7 @@ pipeline {
         slackSend (
           channel: '#virtual-coffee-break',
           color: 'danger',
-          message: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})",
+          message: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.RUN_DISPLAY_URL})",
           teamDomain: 'mesosphere',
           token: "${env.SLACK_TOKEN}",
         )
@@ -236,7 +236,7 @@ pipeline {
         slackSend (
           channel: '#virtual-coffee-break',
           color: 'warning',
-          message: "UNSTABLE: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})",
+          message: "UNSTABLE: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.RUN_DISPLAY_URL})",
           teamDomain: 'mesosphere',
           token: "${env.SLACK_TOKEN}",
         )
