@@ -210,7 +210,7 @@ pipeline {
         }
       }
       steps {
-        build job: "frontend/dcos-ui-ee-pipeline/" + env.BRANCH_NAME.replaceAll("/", "%2F"), wait: true
+        build job: "frontend/dcos-ui-ee-pipeline/" + env.BRANCH_NAME.replaceAll("/", "%2F"), wait: false, propagate: false
       }
     }
   }
