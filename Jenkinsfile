@@ -191,6 +191,30 @@ pipeline {
       }
     }
 
+
+    stage('Create Release'){
+      agent {
+        label "mesos"
+      }
+      when {
+        expression {
+          release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
+        }
+      }
+
+      steps {
+        withCredentials([
+            string(credentialsId: 'd146870f-03b0-4f6a-ab70-1d09757a51fc',variable: 'GH_TOKEN')
+        ]) {
+          sh "git config --global user.email mesosphere-ci@users.noreply.github.com"
+          sh "git config --global user.name 'MesosphereCI Robot'"
+          sh "git config credential.helper 'cache --timeout=300'"
+
+          sh "npm run semantic-release"
+        }
+      }
+    }
+
     stage('Release Version'){
       agent {
         label "mesos"
@@ -210,8 +234,6 @@ pipeline {
           sh "git config --global user.email $GIT_USER@users.noreply.github.com"
           sh "git config --global user.name 'MesosphereCI Robot'"
           sh "git config credential.helper 'cache --timeout=300'"
-
-          sh "CREATE_RELEASE=1 PUSH_RELEASE=1 ./scripts/ci/bump-version"
 
           sh "./scripts/ci/release-version"
         }
