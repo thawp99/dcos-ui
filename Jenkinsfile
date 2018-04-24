@@ -11,11 +11,7 @@ def master_branches = ["master", "feature/ci"] as String[]
 def release_branches = ["master", "feature/ci"] as String[]
 
 pipeline {
-  agent {
-    dockerfile {
-      args  '--shm-size=2g'
-    }
-  }
+  agent none
 
   parameters {
     booleanParam(defaultValue: false, description: 'Create release and bump package version in DC/OS', name: 'CREATE_RELEASE')
@@ -33,12 +29,18 @@ pipeline {
 
   stages {
     stage('Authorization') {
+      agent {
+        label "mesos"
+      }
       steps {
         user_is_authorized(master_branches, '8b793652-f26a-422f-a9ba-0d1e47eb9d89', '#frontend-dev')
       }
     }
 
     stage('Checkout') {
+      agent {
+        label "mesos"
+      }
       when {
         expression {
           release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
@@ -54,6 +56,11 @@ pipeline {
     }
 
     stage('Build') {
+      agent {
+        dockerfile {
+          label "mesos-med"
+        }
+      }
       steps {
         ansiColor('xterm') {
           sh "npm ci"
@@ -75,7 +82,9 @@ pipeline {
       parallel {
         stage('Lint') {
           agent {
-            label "mesos-med"
+            dockerfile {
+              label "mesos-med"
+            }
           }
           steps {
             sh "npm run lint"
@@ -84,7 +93,9 @@ pipeline {
 
         stage('Unit Tests') {
           agent {
-            label "mesos-sec"
+            dockerfile {
+              label "mesos-sec"
+            }
           }
           steps {
             sh "npm run test -- --maxWorkers=2"
@@ -93,7 +104,10 @@ pipeline {
 
         stage('Integration Test') {
           agent {
-            label "mesos-med"
+            dockerfile {
+              args  '--shm-size=1g'
+              label "mesos-med"
+            }
           }
           steps {
             unstash 'dist'
@@ -112,7 +126,10 @@ pipeline {
 
         stage('System Test') {
           agent {
-            label "mesos-med"
+            dockerfile {
+              args  '--shm-size=1g'
+              label "mesos-med"
+            }
           }
           steps {
             withCredentials([
@@ -144,6 +161,9 @@ pipeline {
     // - dcos-ui/master/dcos-ui-latest
     // - dcos-ui/1.12/dcos-ui-latest
     stage('Release Latest') {
+      agent {
+        label "mesos"
+      }
       when {
         expression {
           release_branches.contains(BRANCH_NAME)
@@ -172,6 +192,9 @@ pipeline {
     }
 
     stage('Release Version'){
+      agent {
+        label "mesos"
+      }
       when {
         expression {
           release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
@@ -202,6 +225,9 @@ pipeline {
     }
 
     stage('Run Enterprise Pipeline') {
+      agent {
+        label "mesos"
+      }
       when {
         expression {
           release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == false
