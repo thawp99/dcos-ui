@@ -44,7 +44,6 @@ pipeline {
           release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
         }
       }
-
       steps {
         // fetch whole repo (jenkins only checks out one sha)
         sh "git fetch --tags"
@@ -54,43 +53,16 @@ pipeline {
       }
     }
 
-    stage('Initialization') {
-      steps {
-        ansiColor('xterm') {
-          retry(2) {
-            sh '''npm --unsafe-perm install'''
-          }
-
-          sh '''npm run scaffold'''
-        }
-      }
-    }
-
-    stage('Lint') {
-      steps {
-        ansiColor('xterm') {
-          sh '''npm run lint'''
-        }
-      }
-    }
-
-    stage('Unit Test') {
-      steps {
-        ansiColor('xterm') {
-          sh '''npm run test -- --maxWorkers=2'''
-        }
-      }
-    }
-
     stage('Build') {
       steps {
         ansiColor('xterm') {
-          sh '''npm run build-assets'''
+          sh "npm ci"
+          sh "npm run scaffold"
+          sh "npm run build-assets"
           sh "npm run validate-build"
           sh "tar czf release.tar.gz dist"
         }
       }
-
       post {
         always {
           stash includes: 'dist/*', name: 'dist'
@@ -98,44 +70,70 @@ pipeline {
         }
       }
     }
-    stage('Integration Test') {
-      steps {
-        unstash 'dist'
-        sh "npm run integration-tests"
-      }
 
-      post {
-        always {
-          archiveArtifacts 'cypress/**/*'
-          junit 'cypress/results.xml'
+    stage('Validate Build') {
+      parallel {
+        stage('Lint') {
+          agent {
+            label "mesos-med"
+          }
+          steps {
+            sh "npm run lint"
+          }
         }
-      }
-    }
 
-    stage('System Test') {
-      steps {
-        withCredentials([
-            [
-              $class: 'AmazonWebServicesCredentialsBinding',
-              credentialsId: 'f40eebe0-f9aa-4336-b460-b2c4d7876fde',
-              accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-              secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-            ]
-          ]) {
-          unstash 'dist'
+        stage('Unit Tests') {
+          agent {
+            label "mesos-sec"
+          }
+          steps {
+            sh "npm run test -- --maxWorkers=2"
+          }
+        }
 
-          ansiColor('xterm') {
-            retry(2) {
-              sh '''dcos-system-test-driver -j1 -v ./system-tests/driver-config/jenkins.sh'''
+        stage('Integration Test') {
+          agent {
+            label "mesos-med"
+          }
+          steps {
+            unstash 'dist'
+            // we need to install again because `npm run integration-tests` relies on dependencies
+            sh "npm ci"
+            sh "npm run scaffold"
+            sh "npm run integration-tests"
+          }
+          post {
+            always {
+              archiveArtifacts 'cypress/**/*'
+              junit 'cypress/results.xml'
             }
           }
         }
-      }
 
-      post {
-        always {
-          archiveArtifacts 'results/**/*'
-          junit 'results/results.xml'
+        stage('System Test') {
+          agent {
+            label "mesos-med"
+          }
+          steps {
+            withCredentials([
+                [
+                  $class: 'AmazonWebServicesCredentialsBinding',
+                  credentialsId: 'f40eebe0-f9aa-4336-b460-b2c4d7876fde',
+                  accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                  secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]
+              ]) {
+              unstash 'dist'
+
+              sh "dcos-system-test-driver -j1 -v ./system-tests/driver-config/jenkins.sh"
+            }
+          }
+          post {
+            always {
+              archiveArtifacts 'results/**/*'
+              junit 'results/results.xml'
+            }
+          }
         }
       }
     }
