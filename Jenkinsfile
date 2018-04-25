@@ -63,6 +63,7 @@ pipeline {
       }
       steps {
         ansiColor('xterm') {
+          sh "git status"
           sh "npm --unsafe-perms install"
           sh "npm run scaffold"
           sh "npm run build-assets"
