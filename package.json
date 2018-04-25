@@ -1,6 +1,6 @@
 {
   "name": "dcos-ui",
-  "version": "1.13.0",
+  "version": "0.0.0-development",
   "description": "User Interface of the DCOS",
   "main": "js/index.js",
   "keywords": [
@@ -31,7 +31,10 @@
   "release": {
     "branch": "feature/ci",
     "tagFormat": "master+v${version}",
-    "dryRun": true
+    "dryRun": true,
+    "prepare": [],
+    "verifyConditions": ["@semantic-release/github"],
+    "publish": ["@semantic-release/github"]
   },
   "dependencies": {
     "@dcos/http-service": "0.3.0",
@@ -148,7 +151,6 @@
     "rxjs-marbles": "2.3.1",
     "semantic-release": "15.1.7",
     "source-map-loader": "0.1.5",
-    "standard-version": "4.3.0",
     "string-replace-webpack-plugin": "0.0.3",
     "style-loader": "0.20.1",
     "stylelint": "7.2.0",
@@ -198,8 +200,7 @@
     "validate-build": "scripts/validate-build dist/*.js",
     "versions": "echo npm: $(npm --version) && echo node: $(node --version)",
     "tslint": "tslint -c tslint.json --project tsconfig.json",
-    "semantic-release": "semantic-release",
-    "release": "standard-version --tag-prefix \"$(python -c \"import sys, json; dcosrc = json.load(open('.dcosrc')); sys.stdout.write(str(dcosrc['base']));\")+v\""
+    "semantic-release": "semantic-release"
   },
   "jest-webpack-alias": {
     "configFile": "./webpack/webpack.dev.js"
