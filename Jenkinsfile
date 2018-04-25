@@ -55,51 +55,23 @@ pipeline {
       }
     }
 
-    stage('Build') {
-      agent {
-        dockerfile {
-          label "mesos-med"
-        }
-      }
-      steps {
-        ansiColor('xterm') {
-          sh "git status"
-          sh "./scripts/pre-install"
-          sh "npm install"
-          sh "npm run scaffold"
-          sh "npm run build-assets"
-          sh "npm run validate-build"
-          sh "tar czf release.tar.gz dist"
-        }
-      }
-      post {
-        always {
-          stash includes: 'dist/*', name: 'dist'
-          stash includes: 'release.tar.gz', name: 'release'
-        }
-      }
-    }
-
     stage('Validate Build') {
       parallel {
-        stage('Lint') {
-          agent {
-            dockerfile {
-              label "mesos-med"
-            }
-          }
-          steps {
-            sh "npm run lint"
-          }
-        }
-
-        stage('Unit Tests') {
+        stage('Lint & Unit Tests') {
           agent {
             dockerfile {
               label "mesos-sec"
             }
           }
           steps {
+            sh "./scripts/pre-install"
+            sh "npm install"
+            sh "npm run scaffold"
+            sh "npm run build-assets"
+            sh "npm run validate-build"
+
+            sh "npm run lint"
+
             sh "npm run test -- --maxWorkers=2"
           }
         }
@@ -112,11 +84,12 @@ pipeline {
             }
           }
           steps {
-            unstash 'dist'
-            // we need to install again because `npm run integration-tests` relies on dependencies
             sh "./scripts/pre-install"
             sh "npm install"
             sh "npm run scaffold"
+            sh "npm run build-assets"
+            sh "npm run validate-build"
+
             sh "npm run integration-tests"
           }
           post {
@@ -143,7 +116,11 @@ pipeline {
                   secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]
               ]) {
-              unstash 'dist'
+              sh "./scripts/pre-install"
+              sh "npm install"
+              sh "npm run scaffold"
+              sh "npm run build-assets"
+              sh "npm run validate-build"
 
               sh "dcos-system-test-driver -j1 -v ./system-tests/driver-config/jenkins.sh"
             }
@@ -158,108 +135,105 @@ pipeline {
       }
     }
 
-    // Upload the current master as "latest" to s3
-    // and update the corresponding DC/OS branch:
-    // For Example:
-    // - dcos-ui/master/dcos-ui-latest
-    // - dcos-ui/1.12/dcos-ui-latest
-    stage('Release Latest') {
-      agent {
-        label "mesos"
-      }
-      when {
-        expression {
-          release_branches.contains(BRANCH_NAME)
+    stage('Releases') {
+      parallel {
+        // Upload the current master as "latest" to s3
+        // and update the corresponding DC/OS branch:
+        // For Example:
+        // - dcos-ui/master/dcos-ui-latest
+        // - dcos-ui/1.12/dcos-ui-latest
+        stage('Release Latest') {
+          agent {
+            label "mesos"
+          }
+          when {
+            expression {
+              release_branches.contains(BRANCH_NAME)
+            }
+          }
+
+          steps {
+            withCredentials([
+                string(credentialsId: '3f0dbb48-de33-431f-b91c-2366d2f0e1cf',variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'f585ec9a-3c38-4f67-8bdb-79e5d4761937',variable: 'AWS_SECRET_ACCESS_KEY'),
+                usernamePassword(credentialsId: 'a7ac7f84-64ea-4483-8e66-bb204484e58f', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USER')
+            ]) {
+              sh "git config --global user.email $GIT_USER@users.noreply.github.com"
+              sh "git config --global user.name 'MesosphereCI Robot'"
+              sh "git config credential.helper 'cache --timeout=300'"
+
+              sh "FORCE_UPLOAD=1 ./scripts/ci/release-latest"
+            }
+          }
+
+          post {
+            always {
+              archiveArtifacts 'buildinfo.json'
+            }
+          }
         }
-      }
 
-      steps {
-        withCredentials([
-            string(credentialsId: '3f0dbb48-de33-431f-b91c-2366d2f0e1cf',variable: 'AWS_ACCESS_KEY_ID'),
-            string(credentialsId: 'f585ec9a-3c38-4f67-8bdb-79e5d4761937',variable: 'AWS_SECRET_ACCESS_KEY'),
-            usernamePassword(credentialsId: 'a7ac7f84-64ea-4483-8e66-bb204484e58f', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USER')
-        ]) {
-          sh "git config --global user.email $GIT_USER@users.noreply.github.com"
-          sh "git config --global user.name 'MesosphereCI Robot'"
-          sh "git config credential.helper 'cache --timeout=300'"
 
-          sh "FORCE_UPLOAD=1 ./scripts/ci/release-latest"
+        stage('Release Version'){
+          agent {
+            label "mesos"
+          }
+          when {
+            expression {
+              release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
+            }
+          }
+
+          steps {
+            sh "./scripts/pre-install"
+            sh "npm install"
+            sh "npm run scaffold"
+            sh "npm run build-assets"
+            sh "npm run validate-build"
+
+            withCredentials([
+                string(credentialsId: 'd146870f-03b0-4f6a-ab70-1d09757a51fc',variable: 'GH_TOKEN')
+            ]) {
+              sh "git config --global user.email mesosphere-ci@users.noreply.github.com"
+              sh "git config --global user.name 'MesosphereCI Robot'"
+              sh "git config credential.helper 'cache --timeout=300'"
+
+              sh "npm run semantic-release"
+            }
+
+            withCredentials([
+                string(credentialsId: '3f0dbb48-de33-431f-b91c-2366d2f0e1cf',variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'f585ec9a-3c38-4f67-8bdb-79e5d4761937',variable: 'AWS_SECRET_ACCESS_KEY'),
+                usernamePassword(credentialsId: 'a7ac7f84-64ea-4483-8e66-bb204484e58f', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USER')
+            ]) {
+              sh "git config --global user.email $GIT_USER@users.noreply.github.com"
+              sh "git config --global user.name 'MesosphereCI Robot'"
+              sh "git config credential.helper 'cache --timeout=300'"
+
+              sh "./scripts/ci/release-version"
+            }
+          }
+          post {
+            always {
+              archiveArtifacts 'pr.json'
+              archiveArtifacts 'comment.json'
+            }
+          }
         }
-      }
 
-      post {
-        always {
-          archiveArtifacts 'buildinfo.json'
+        stage('Run Enterprise Pipeline') {
+          agent {
+            label none
+          }
+          when {
+            expression {
+              release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == false
+            }
+          }
+          steps {
+            build job: "frontend/dcos-ui-ee-pipeline/" + env.BRANCH_NAME.replaceAll("/", "%2F"), wait: false, propagate: false
+          }
         }
-      }
-    }
-
-
-    stage('Create Release'){
-      agent {
-        label "mesos"
-      }
-      when {
-        expression {
-          release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
-        }
-      }
-
-      steps {
-        withCredentials([
-            string(credentialsId: 'd146870f-03b0-4f6a-ab70-1d09757a51fc',variable: 'GH_TOKEN')
-        ]) {
-          sh "git config --global user.email mesosphere-ci@users.noreply.github.com"
-          sh "git config --global user.name 'MesosphereCI Robot'"
-          sh "git config credential.helper 'cache --timeout=300'"
-
-          sh "npm run semantic-release"
-        }
-      }
-    }
-
-    stage('Release Version'){
-      agent {
-        label "mesos"
-      }
-      when {
-        expression {
-          release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == true
-        }
-      }
-
-      steps {
-        withCredentials([
-            string(credentialsId: '3f0dbb48-de33-431f-b91c-2366d2f0e1cf',variable: 'AWS_ACCESS_KEY_ID'),
-            string(credentialsId: 'f585ec9a-3c38-4f67-8bdb-79e5d4761937',variable: 'AWS_SECRET_ACCESS_KEY'),
-            usernamePassword(credentialsId: 'a7ac7f84-64ea-4483-8e66-bb204484e58f', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USER')
-        ]) {
-          sh "git config --global user.email $GIT_USER@users.noreply.github.com"
-          sh "git config --global user.name 'MesosphereCI Robot'"
-          sh "git config credential.helper 'cache --timeout=300'"
-
-          sh "./scripts/ci/release-version"
-        }
-      }
-      post {
-        always {
-          archiveArtifacts 'pr.json'
-          archiveArtifacts 'comment.json'
-        }
-      }
-    }
-
-    stage('Run Enterprise Pipeline') {
-      agent {
-        label "mesos"
-      }
-      when {
-        expression {
-          release_branches.contains(BRANCH_NAME) && params.CREATE_RELEASE == false
-        }
-      }
-      steps {
-        build job: "frontend/dcos-ui-ee-pipeline/" + env.BRANCH_NAME.replaceAll("/", "%2F"), wait: false, propagate: false
       }
     }
   }
