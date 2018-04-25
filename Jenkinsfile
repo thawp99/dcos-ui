@@ -11,7 +11,11 @@ def master_branches = ["master", "feature/ci"] as String[]
 def release_branches = ["master", "feature/ci"] as String[]
 
 pipeline {
-  agent none
+  agent {
+    dockerfile {
+      args '--shm-size=1g'
+    }
+  }
 
   environment {
     JENKINS_VERSION = 'yes'
@@ -33,87 +37,58 @@ pipeline {
       }
     }
 
-    stage('Validate Build') {
-      parallel {
-        stage('Lint & Unit Tests') {
-          agent {
-            dockerfile {
-              label "mesos-sec"
-            }
-          }
-          steps {
-            sh "./scripts/pre-install"
-            sh "npm install"
-            sh "npm run scaffold"
+    stage('Install and Build') {
+      steps {
+        sh "npm install"
+        sh "npm run build"
+        sh "tar czf release.tar.gz dist"
+      }
+    }
 
-            sh "npm run lint"
-
-            sh "npm run test -- --maxWorkers=2"
-          }
+    stage('Integration Tests') {
+      steps {
+        sh "npm run integration-tests"
+      }
+      post {
+        always {
+          archiveArtifacts 'cypress/**/*'
+          junit 'cypress/results.xml'
         }
+      }
+    }
 
-        stage('Integration Test') {
-          agent {
-            dockerfile {
-              args  '--shm-size=1g'
-              label "mesos-med"
-            }
-          }
-          steps {
-            sh "./scripts/pre-install"
-            sh "npm install"
-            sh "npm run scaffold"
-            sh "npm run build-assets"
-            sh "npm run validate-build"
-
-            sh "npm run integration-tests"
-          }
-          post {
-            always {
-              archiveArtifacts 'cypress/**/*'
-              junit 'cypress/results.xml'
-            }
-          }
+    stage('System Tests') {
+      steps {
+        withCredentials([
+            [
+              $class: 'AmazonWebServicesCredentialsBinding',
+              credentialsId: 'f40eebe0-f9aa-4336-b460-b2c4d7876fde',
+              accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+              secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+            ]
+          ]) {
+          sh "dcos-system-test-driver -j1 -v ./system-tests/driver-config/jenkins.sh"
         }
+      }
+      post {
+        always {
+          archiveArtifacts 'results/**/*'
+          junit 'results/results.xml'
+        }
+      }
+    }
 
-        stage('System Test') {
-          agent {
-            dockerfile {
-              args  '--shm-size=1g'
-              label "mesos-med"
-            }
-          }
-          steps {
-            sh "./scripts/pre-install"
-            sh "npm install"
-            sh "npm run scaffold"
-            sh "npm run build-assets"
-            sh "npm run validate-build"
-            withCredentials([
-                [
-                  $class: 'AmazonWebServicesCredentialsBinding',
-                  credentialsId: 'f40eebe0-f9aa-4336-b460-b2c4d7876fde',
-                  accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                  secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]
-              ]) {
-              sh "dcos-system-test-driver -j1 -v ./system-tests/driver-config/jenkins.sh"
-            }
-          }
-          post {
-            always {
-              archiveArtifacts 'results/**/*'
-              junit 'results/results.xml'
-            }
-          }
+    stage('Semantic Release') {
+      steps {
+        withCredentials([
+            string(credentialsId: 'd146870f-03b0-4f6a-ab70-1d09757a51fc', variable: 'GH_TOKEN')
+        ]) {
+          sh "npm run semantic-release -- -d"
         }
       }
     }
 
     stage('Run Enterprise Pipeline') {
-      agent {
-        label "mesos"
-      }
       when {
         expression {
           release_branches.contains(BRANCH_NAME)

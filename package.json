@@ -34,7 +34,7 @@
     "dryRun": true,
     "prepare": [],
     "verifyConditions": ["@semantic-release/github"],
-    "publish": ["@semantic-release/github"]
+    "publish": [{ "path": "@semantic-release/github", "assets": {"path": "release.tar.gz", "name": "release name", "label": "release label" }}]
   },
   "dependencies": {
     "@dcos/http-service": "0.3.0",
@@ -176,6 +176,7 @@
     "clean": "rm -rf dist",
     "build-shrinkwrap": "npm shrinkwrap --dev && ./node_modules/.bin/gulp fixShrinkwrap",
     "preinstall": "./scripts/pre-install",
+    "postinstall": "npm run scaffold",
     "prebuild-assets": "./node_modules/.bin/gulp checkDependencies",
     "build-assets": "npm run clean && NODE_ENV=production webpack --colors --config ./webpack/webpack.production.js",
     "postbuild-assets": "find ./dist -name 'index.*.css' -exec node ./scripts/inline-bootstrap-css.js ./dist/index.html {} \\;",
