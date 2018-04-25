@@ -39,7 +39,7 @@ pipeline {
 
     stage('Install and Build') {
       steps {
-        sh "npm install"
+        sh "npm install --unsafe-perm"
         sh "npm run build"
         sh "tar czf release.tar.gz dist"
       }
