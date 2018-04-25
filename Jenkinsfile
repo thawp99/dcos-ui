@@ -63,7 +63,7 @@ pipeline {
       }
       steps {
         ansiColor('xterm') {
-          sh "npm install"
+          sh "npm --unsafe-perms install"
           sh "npm run scaffold"
           sh "npm run build-assets"
           sh "npm run validate-build"
@@ -112,7 +112,7 @@ pipeline {
           steps {
             unstash 'dist'
             // we need to install again because `npm run integration-tests` relies on dependencies
-            sh "npm install"
+            sh "npm --unsafe-perms install"
             sh "npm run scaffold"
             sh "npm run integration-tests"
           }
