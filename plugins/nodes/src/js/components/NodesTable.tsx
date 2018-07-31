@@ -1,11 +1,11 @@
 import * as React from "react";
-import { Table, Column } from "@dcos/ui-kit";
+import { Table, Column } from "@dcos/ui-kit/dist/packages";
 
 import NodesList from "#SRC/js/structs/NodesList";
 import Node from "#SRC/js/structs/Node";
 
 import { SortableColumnHeader } from "ui-kit-stage/SortableColumnHeader";
-import { SortDirection } from "../types/SortDirection";
+import { SortDirection } from "#PLUGINS/nodes/src/js/types/SortDirection";
 
 import { ipSorter, ipRenderer, ipSizer } from "../columns/NodesTableIpColumn";
 import {
