@@ -124,7 +124,7 @@ var Page = React.createClass({
       "page-body-content pod pod-tall flex",
       "flex-direction-top-to-bottom flex-item-grow-1",
       {
-        "flex-item-shrink-1": dontScroll
+        "flex-item-shrink-1 flush-bottom": dontScroll
       }
     );
 
